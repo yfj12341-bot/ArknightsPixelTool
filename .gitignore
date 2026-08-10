@@ -20,3 +20,7 @@ work-backup/
 *.log
 .DS_Store
 Thumbs.db
+
+# Signing (do not commit)
+keystore.properties
+keystore/
