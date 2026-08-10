@@ -39,6 +39,12 @@ android {
         jvmTarget = "17"
     }
 
+    applicationVariants.all {
+        outputs.all {
+            val outputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            outputImpl.outputFileName = "ArknightsPixelTool-${name}.apk"
+        }
+    }
     buildFeatures {
         compose = true
     }
