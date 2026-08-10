@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+.kotlin/
+build/
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local environment
+local.properties
+
+# Local backup / scratch
+work-backup/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
