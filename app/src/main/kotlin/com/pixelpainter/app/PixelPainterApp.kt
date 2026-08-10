@@ -1,5 +1,6 @@
 package com.pixelpainter.app
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.net.Uri
@@ -29,11 +30,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -68,6 +75,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pixelpainter.app.BuildConfig
 import com.pixelpainter.core.ColorMath
 import com.pixelpainter.core.CropBounds
 import com.pixelpainter.core.DownsampleMode
@@ -90,6 +98,7 @@ private const val MAX_HISTORY = 50
 private const val PREVIEW_MAX_SIDE = 640
 private const val ADJUSTMENT_PREVIEW_DEBOUNCE_MS = 24L
 private const val ADJUSTMENT_FULL_DEBOUNCE_MS = 60L
+private const val GITHUB_URL = "https://github.com/yfj12341-bot/ArknightsPixelTool"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +129,7 @@ fun PixelPainterApp() {
     var cropStartY by remember { mutableStateOf(0f) }
     var cropSide by remember { mutableStateOf(0f) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var showAbout by remember { mutableStateOf(false) }
     var rotationDegrees by remember { mutableStateOf(0f) }
     var brightness by remember { mutableStateOf(0f) }
     var contrast by remember { mutableStateOf(0f) }
@@ -273,7 +283,14 @@ fun PixelPainterApp() {
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text("像素画助手") })
+            CenterAlignedTopAppBar(
+                title = { Text("像素画助手") },
+                actions = {
+                    IconButton(onClick = { showAbout = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "关于")
+                    }
+                }
+            )
         }
     ) { innerPadding ->
         Column(
@@ -443,8 +460,57 @@ fun PixelPainterApp() {
             }
         }
     }
+    if (showAbout) {
+        AboutDialog(onDismiss = { showAbout = false })
+    }
 }
 
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("关于") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("像素画助手", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "ArknightsPixelTool v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                HorizontalDivider()
+                Text(
+                    "为《明日方舟》奇象巡展活动准备的 Android 像素画生成器，支持导入图片生成 24×24 ~ 64×64 像素画。",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "玩家自制工具，与游戏官方无关；请勿用于任何违法用途。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider()
+                Text("GitHub：", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = "github.com/yfj12341-bot/ArknightsPixelTool",
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(GITHUB_URL)
+                            )
+                            context.startActivity(intent)
+                        }
+                        .padding(2.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("确定") }
+        }
+    )
+}
 @Composable
 private fun SourceCropPanel(
     image: RgbImage,
