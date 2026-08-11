@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">像素画助手</string>
-</resources>
 
+    <string name="accessibility_service_name">像素画助手自动填充</string>
+    <string name="accessibility_service_description">实验功能：在明日方舟像素画编辑界面中自动点击调色盘与画布，用于填充生成的 24x24 像素画。仅建议用于固定调色板模式。</string>
+</resources>

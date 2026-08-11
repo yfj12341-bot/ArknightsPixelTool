@@ -1,9 +1,11 @@
 package com.pixelpainter.app
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Paint
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -87,6 +89,10 @@ import com.pixelpainter.core.PixelArtOptions
 import com.pixelpainter.core.PixelArtResult
 import com.pixelpainter.core.RgbImage
 import com.pixelpainter.core.SamplePalettes
+import com.pixelpainter.app.autofill.AutoFillSettings
+import com.pixelpainter.app.autofill.AutoFillStateHolder
+import com.pixelpainter.app.autofill.AutoFillSupport
+import com.pixelpainter.app.autofill.FillSpeedPreset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -130,6 +136,7 @@ fun PixelPainterApp() {
     var cropSide by remember { mutableStateOf(0f) }
     var notice by remember { mutableStateOf<String?>(null) }
     var showAbout by remember { mutableStateOf(false) }
+    var showAutoFillSetup by remember { mutableStateOf(false) }
     var rotationDegrees by remember { mutableStateOf(0f) }
     var brightness by remember { mutableStateOf(0f) }
     var contrast by remember { mutableStateOf(0f) }
@@ -455,10 +462,46 @@ fun PixelPainterApp() {
                             selectedCell = null
                         },
                         onSharePng = { sharePixelPng(context, result ?: return@ResultSection) },
+                        onAutoFillRequest = { showAutoFillSetup = true },
                     )
                 }
             }
         }
+    }
+    if (showAutoFillSetup) {
+        AutoFillSetupDialog(
+            onDismiss = { showAutoFillSetup = false },
+            onConfirm = { settings ->
+                val art = result ?: return@AutoFillSetupDialog
+                showAutoFillSetup = false
+                AutoFillStateHolder.setPending(art, settings)
+                context.sendBroadcast(
+                    android.content.Intent(AutoFillSupport.ACTION_START_SETUP).apply {
+                        setPackage(context.packageName)
+                        putExtra(AutoFillSupport.EXTRA_HAS_ART, true)
+                        putExtra(AutoFillSupport.EXTRA_PALETTE_SIZE, art.palette.colors.size)
+                        putExtra(AutoFillSupport.EXTRA_PALETTE_COLORS, art.palette.colors.toIntArray())
+                        putExtra(AutoFillSupport.EXTRA_INDICES, art.indices)
+                        putExtra(AutoFillSupport.EXTRA_GRID_SIZE, settings.gridSize)
+                        putExtra(AutoFillSupport.EXTRA_PALETTE_COLUMNS, settings.paletteColumns)
+                        putExtra(AutoFillSupport.EXTRA_PALETTE_ROWS, settings.paletteRows)
+                        putExtra(AutoFillSupport.EXTRA_VISIBLE_COLORS, settings.visibleColors)
+                        putExtra(AutoFillSupport.EXTRA_PAGE_OVERLAP, settings.pageOverlapColors)
+                        putExtra(AutoFillSupport.EXTRA_SWIPE_UP_NEXT, settings.swipeUpToNextPage)
+                        putExtra(AutoFillSupport.EXTRA_TAP_DELAY, settings.tapDelayMs)
+                        putExtra(AutoFillSupport.EXTRA_PALETTE_DELAY, settings.paletteDelayMs)
+                        putExtra(AutoFillSupport.EXTRA_SWIPE_DELAY, settings.swipeDelayMs)
+                        putExtra(AutoFillSupport.EXTRA_COUNTDOWN, settings.countdownSeconds)
+                    }
+                )
+                if (!AutoFillSupport.isAccessibilityServiceEnabled(context)) {
+                    AutoFillSupport.notifyOpenSettings(context)
+                    AutoFillSupport.openAccessibilitySettings(context)
+                } else {
+                    Toast.makeText(context, "请切回明日方舟界面，稍候将出现框选浮层", Toast.LENGTH_LONG).show()
+                }
+            }
+        )
     }
     if (showAbout) {
         AboutDialog(onDismiss = { showAbout = false })
@@ -472,7 +515,10 @@ private fun AboutDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("关于") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text("像素画助手", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "ArknightsPixelTool v${BuildConfig.VERSION_NAME}",
@@ -503,6 +549,30 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                             context.startActivity(intent)
                         }
                         .padding(2.dp)
+                )
+                HorizontalDivider()
+                Text("更新日志", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "v0.2.0",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "• 新增自动填充：框选游戏内画布与调色盘位置后自动点击填充",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "• 提供非常快 / 快 / 中等 / 慢四档填充速度",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "v0.1.0",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "• 初始版本：图片转像素画、调色板、手动编辑与 PNG 分享",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         },
@@ -845,7 +915,8 @@ private fun ResultSection(
     onUndo: () -> Unit,
     canRedo: Boolean,
     onRedo: () -> Unit,
-    onSharePng: () -> Unit
+    onSharePng: () -> Unit,
+    onAutoFillRequest: () -> Unit
 ) {
     var showGrid by remember { mutableStateOf(true) }
 
@@ -958,6 +1029,11 @@ private fun ResultSection(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (paletteMode == PaletteMode.FIXED) {
+                OutlinedButton(onClick = onAutoFillRequest, modifier = Modifier.weight(1f)) {
+                    Text("自动填充到游戏")
+                }
+            }
             OutlinedButton(onClick = onSharePng, modifier = Modifier.weight(1f)) {
                 Text("分享 PNG")
             }
@@ -1380,4 +1456,94 @@ private fun EmptyState(onPick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun AutoFillSetupDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (AutoFillSettings) -> Unit
+) {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("autofill", Context.MODE_PRIVATE)
+    }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var selectedPreset by remember {
+        mutableStateOf(
+            runCatching {
+                FillSpeedPreset.valueOf(
+                    prefs.getString("speed_preset", FillSpeedPreset.MEDIUM.name)
+                        ?: FillSpeedPreset.MEDIUM.name
+                )
+            }.getOrDefault(FillSpeedPreset.MEDIUM)
+        )
+    }
+
+    fun choosePreset(preset: FillSpeedPreset) {
+        selectedPreset = preset
+        prefs.edit().putString("speed_preset", preset.name).apply()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("自动填充到明日方舟") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "仅支持固定调色板生成的 24×24 像素画。",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "点击「准备填充」后切回明日方舟，在悬浮窗中框选画布和调色盘，再开始自动填充。",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "填充期间请勿触碰屏幕，左上角有「中止填充」按钮可随时停止。",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "收起高级选项" else "高级选项")
+                }
+                if (showAdvanced) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("填充速度", style = MaterialTheme.typography.labelLarge)
+                        FillSpeedPreset.values().toList().chunked(2).forEach { rowPresets ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowPresets.forEach { preset ->
+                                    FilterChip(
+                                        selected = preset == selectedPreset,
+                                        onClick = { choosePreset(preset) },
+                                        label = { Text(preset.label) }
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            "更快的填充速度可能导致误触，请按实际情况选择。",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        AutoFillSettings(
+                            tapDelayMs = selectedPreset.tapDelayMs,
+                            paletteDelayMs = selectedPreset.paletteDelayMs,
+                            swipeDelayMs = selectedPreset.swipeDelayMs
+                        )
+                    )
+                }
+            ) { Text("准备填充") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
