@@ -1497,7 +1497,7 @@ private fun AutoFillSetupDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "点击「准备填充」后切回明日方舟，在悬浮窗中框选画布和调色盘，再开始自动填充。",
+                    "点击「准备填充」后请在 5 秒内切换到明日方舟，倒计时结束后自动弹出框选界面。",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(

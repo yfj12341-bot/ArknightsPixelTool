@@ -43,6 +43,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val preSetupCountdownSeconds = 5
 
     private var root: FrameLayout? = null
     private var overlay: FrameLayout? = null
@@ -98,6 +99,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == AutoFillSupport.ACTION_START_SETUP) {
                 AutoFillStateHolder.applyIntent(intent)
+                startPreSetupCountdown()
             }
         }
     }
@@ -237,6 +239,45 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         }
     }
 
+    private fun startPreSetupCountdown() {
+        mainHandler.post {
+            fillCancelled = false
+            fillActive = false
+            fillJob?.cancel()
+            fillJob = null
+            countdownRunnable?.let { mainHandler.removeCallbacks(it) }
+            countdownRunnable = null
+            hideAbortButton()
+            AutoFillStateHolder.openSetupRequested.set(true)
+            ensureWindow()
+            val view = overlayView ?: return@post
+            val seconds = preSetupCountdownSeconds
+            view.beginPreSetupCountdown(seconds)
+            view.setMessage("")
+            applyFullScreenWindow()
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val params = root?.layoutParams as? WindowManager.LayoutParams
+            if (params != null) {
+                params.flags = baseWindowFlags() or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                runCatching { wm.updateViewLayout(root!!, params) }
+            }
+            val runnable = object : Runnable {
+                var remaining = seconds
+                override fun run() {
+                    if (remaining > 0) {
+                        view.updateCountdown(remaining)
+                        remaining--
+                        mainHandler.postDelayed(this, 1000L)
+                    } else {
+                        countdownRunnable = null
+                        scheduleSetupScreenshot()
+                    }
+                }
+            }
+            countdownRunnable = runnable
+            mainHandler.post(runnable)
+        }
+    }
     private fun showSetupOverlay(bitmap: Bitmap?) {
         cancelFill()
         AutoFillStateHolder.openSetupRequested.set(false)

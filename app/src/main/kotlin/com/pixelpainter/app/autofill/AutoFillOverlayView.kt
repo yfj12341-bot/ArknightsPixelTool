@@ -26,7 +26,7 @@ import kotlin.math.roundToInt
  */
 class AutoFillOverlayView(context: Context) : View(context) {
 
-    enum class UiState { SETUP, COUNTDOWN, PROGRESS, DONE }
+    enum class UiState { PRE_SETUP, SETUP, COUNTDOWN, PROGRESS, DONE }
 
     private val density = resources.displayMetrics.density
     private val px = { value: Float -> value * density }
@@ -105,6 +105,12 @@ class AutoFillOverlayView(context: Context) : View(context) {
         color = Color.WHITE
         textSize = px(12f)
         isFakeBoldText = true
+    }
+    private val bigCountdownPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = px(84f)
+        isFakeBoldText = true
+        textAlign = Paint.Align.CENTER
     }
 
     var screenshot: Bitmap? = null
@@ -194,6 +200,15 @@ class AutoFillOverlayView(context: Context) : View(context) {
         invalidate()
     }
 
+    fun beginPreSetupCountdown(seconds: Int) {
+        uiState = UiState.PRE_SETUP
+        fillProgress = 0f
+        fillLabel = seconds.coerceAtLeast(1).toString()
+        fillStatus = "presetup"
+        message = "请切换到明日方舟，$seconds 秒后开始框选"
+        layoutControls()
+        invalidate()
+    }
     fun beginFill(countdownSeconds: Int) {
         uiState = UiState.COUNTDOWN
         fillStatus = "countdown"
@@ -220,9 +235,13 @@ class AutoFillOverlayView(context: Context) : View(context) {
     }
 
     fun updateCountdown(secondsRemaining: Int) {
-        fillStatus = "countdown"
         fillLabel = secondsRemaining.toString()
-        message = "准备填充，$secondsRemaining 秒后开始"
+        if (uiState == UiState.PRE_SETUP) {
+            message = "请切换到明日方舟，$secondsRemaining 秒后开始框选"
+        } else {
+            fillStatus = "countdown"
+            message = "准备填充，$secondsRemaining 秒后开始"
+        }
         invalidate()
     }
 
@@ -460,11 +479,25 @@ class AutoFillOverlayView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         when (uiState) {
+            UiState.PRE_SETUP -> drawPreSetupCountdown(canvas)
             UiState.SETUP -> drawSetup(canvas)
             UiState.COUNTDOWN, UiState.PROGRESS, UiState.DONE -> drawFill(canvas)
         }
     }
 
+    private fun drawPreSetupCountdown(canvas: Canvas) {
+        canvas.drawColor(0x88000000)
+        val centerX = width / 2f
+        val centerY = height / 2f
+        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText("请切换到明日方舟", centerX, centerY - px(84f), textPaint)
+        smallTextPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText(message, centerX, centerY - px(54f), smallTextPaint)
+        canvas.drawText(fillLabel, centerX, height - px(150f), bigCountdownPaint)
+        canvas.drawText("秒后开始框选", centerX, height - px(118f), smallTextPaint)
+        textPaint.textAlign = Paint.Align.LEFT
+        smallTextPaint.textAlign = Paint.Align.LEFT
+    }
     private fun drawSetup(canvas: Canvas) {
         val shot = screenshot
         if (shot != null) {
@@ -666,7 +699,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
         fillInfoPaint.textAlign = Paint.Align.LEFT
 
         when (uiState) {
-            UiState.COUNTDOWN, UiState.PROGRESS -> Unit
+            UiState.PRE_SETUP, UiState.COUNTDOWN, UiState.PROGRESS -> Unit
             UiState.DONE -> {
                 canvas.drawRect(doneReopenRect, buttonStrokePaint)
                 canvas.drawText(
@@ -701,6 +734,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
                     handleFrameTouch(action, x, y)
                 }
             }
+            UiState.PRE_SETUP -> false
             UiState.COUNTDOWN, UiState.PROGRESS -> handleFillTouch(action, x, y)
             UiState.DONE -> handleDoneTouch(action, x, y)
         }
