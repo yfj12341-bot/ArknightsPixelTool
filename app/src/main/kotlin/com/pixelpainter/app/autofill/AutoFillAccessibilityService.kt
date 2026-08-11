@@ -239,6 +239,37 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         }
     }
 
+    private fun ensureOverlayView(): AutoFillOverlayView? {
+        if (overlayView != null) return overlayView
+        ensureWindow()
+        val view = AutoFillOverlayView(this)
+        overlayView = view
+        view.listener = object : AutoFillOverlayView.Listener {
+            override fun onConfirmSetup(canvas: RectF, palette: RectF) {
+                confirmAndRun(canvas, palette)
+            }
+
+            override fun onCancelFill() {
+                dismissOverlay()
+            }
+
+            override fun onReopenSetup() {
+                scheduleSetupScreenshot()
+            }
+
+            override fun onDismissOverlay() {
+                dismissOverlay()
+            }
+        }
+        overlay?.addView(
+            view,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        return view
+    }
     private fun startPreSetupCountdown() {
         mainHandler.post {
             fillCancelled = false
@@ -249,8 +280,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             countdownRunnable = null
             hideAbortButton()
             AutoFillStateHolder.openSetupRequested.set(true)
-            ensureWindow()
-            val view = overlayView ?: return@post
+            val view = ensureOverlayView() ?: return@post
             val seconds = preSetupCountdownSeconds
             view.beginPreSetupCountdown(seconds)
             view.setMessage("")
@@ -270,7 +300,15 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
                         mainHandler.postDelayed(this, 1000L)
                     } else {
                         countdownRunnable = null
-                        scheduleSetupScreenshot()
+                        val activePkg = rootInActiveWindow?.packageName?.toString()
+                        val switched = activePkg != null &&
+                            !activePkg.startsWith("com.pixelpainter") &&
+                            activePkg !in ignoredWindowPackages
+                        if (switched) {
+                            scheduleSetupScreenshot()
+                        } else {
+                            dismissOverlay()
+                        }
                     }
                 }
             }
@@ -281,34 +319,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
     private fun showSetupOverlay(bitmap: Bitmap?) {
         cancelFill()
         AutoFillStateHolder.openSetupRequested.set(false)
-        ensureWindow()
-        val view = overlayView ?: AutoFillOverlayView(this).also {
-            overlayView = it
-            it.listener = object : AutoFillOverlayView.Listener {
-                override fun onConfirmSetup(canvas: RectF, palette: RectF) {
-                    confirmAndRun(canvas, palette)
-                }
-
-                override fun onCancelFill() {
-                    dismissOverlay()
-                }
-
-                override fun onReopenSetup() {
-                    scheduleSetupScreenshot()
-                }
-
-                override fun onDismissOverlay() {
-                    dismissOverlay()
-                }
-            }
-            overlay?.addView(
-                it,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-        }
+        val view = ensureOverlayView() ?: return
         view.gridSize = AutoFillStateHolder.settings.gridSize
         view.paletteColumns = AutoFillStateHolder.settings.paletteColumns
         view.paletteRows = AutoFillStateHolder.settings.paletteRows
