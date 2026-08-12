@@ -553,6 +553,15 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                 HorizontalDivider()
                 Text("更新日志", style = MaterialTheme.typography.titleSmall)
                 Text(
+                    "v0.2.2",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "• 自动填充 UI 优化：进度悬浮窗支持拖动，避免遮挡画布与调色盘",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
                     "v0.2.1",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
