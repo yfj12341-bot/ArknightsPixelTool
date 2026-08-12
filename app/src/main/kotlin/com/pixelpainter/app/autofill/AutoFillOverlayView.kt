@@ -136,6 +136,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
         fun onFillDragStart()
         fun onFillDragMove(dx: Float, dy: Float)
         fun onFillDragEnd()
+        fun onAbortFill()
     }
 
     var listener: Listener? = null
@@ -177,6 +178,11 @@ class AutoFillOverlayView(context: Context) : View(context) {
     private var fillDragStartY = 0f
     private val doneReopenRect = RectF()
     private val doneDismissRect = RectF()
+    private val abortRect = RectF()
+    private val abortPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xCCB3261E.toInt()
+        style = Paint.Style.FILL
+    }
 
     private companion object {
         const val DRAG_NONE = -1
@@ -479,6 +485,14 @@ class AutoFillOverlayView(context: Context) : View(context) {
             fillCardRect.right - innerPad,
             doneReopenRect.top - gap
         )
+        if (uiState == UiState.PROGRESS) {
+            abortRect.set(
+                fillCardRect.left + innerPad,
+                fillCardRect.bottom - px(42f),
+                fillCardRect.right - innerPad,
+                fillCardRect.bottom - px(14f)
+            )
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -731,6 +745,17 @@ class AutoFillOverlayView(context: Context) : View(context) {
             fillInfoPaint.apply { textAlign = Paint.Align.LEFT }
         )
         fillInfoPaint.textAlign = Paint.Align.LEFT
+
+        if (uiState == UiState.PROGRESS) {
+            canvas.drawRoundRect(abortRect, px(4f), px(4f), abortPaint)
+            canvas.drawText(
+                "中止填充",
+                abortRect.centerX(),
+                abortRect.centerY() - (fillButtonPaint.ascent() + fillButtonPaint.descent()) / 2f,
+                fillButtonPaint.apply { textAlign = Paint.Align.CENTER }
+            )
+            fillButtonPaint.textAlign = Paint.Align.LEFT
+        }
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
@@ -746,7 +771,8 @@ class AutoFillOverlayView(context: Context) : View(context) {
                 }
             }
             UiState.PRE_SETUP -> false
-            UiState.COUNTDOWN, UiState.PROGRESS -> handleFillTouch(event)
+            UiState.COUNTDOWN -> handleFillTouch(event)
+            UiState.PROGRESS -> handleProgressTouch(action, x, y)
             UiState.DONE -> handleDoneTouch(action, x, y)
         }
     }
@@ -822,6 +848,30 @@ class AutoFillOverlayView(context: Context) : View(context) {
         return true
     }
 
+    private fun handleProgressTouch(action: Int, x: Float, y: Float): Boolean {
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                clickX = x
+                clickY = y
+                clickMoved = false
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (abs(x - clickX) > 12f || abs(y - clickY) > 12f) clickMoved = true
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!clickMoved && abortRect.contains(x, y)) {
+                    listener?.onAbortFill()
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                return true
+            }
+        }
+        return true
+    }
     private fun handleDoneTouch(action: Int, x: Float, y: Float): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {

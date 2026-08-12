@@ -89,12 +89,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
     @Volatile
     private var syntheticTouchActive = false
 
-    /** Small touchable "abort" button shown while the fill is running. */
-    private var abortWindow: FrameLayout? = null
-
-    /** True while the user is pressing the abort button (skip auto-abort). */
-    @Volatile
-    private var abortButtonPressed = false
 
     @Volatile
     private var pendingArt: PixelArtResult? = null
@@ -144,7 +138,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             // immediately so a second touch point can never trigger a pinch
             // zoom or canvas scroll that would misalign the remaining taps.
             if (overlayView?.uiState == AutoFillOverlayView.UiState.PROGRESS &&
-                !syntheticTouchActive && !abortButtonPressed && !fillWindowDragging
+                !syntheticTouchActive && !fillWindowDragging
             ) {
                 abortFill("检测到屏幕被触碰，已中止填充，请勿在填充时触碰屏幕")
             }
@@ -269,7 +263,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
             override fun onFillDragStart() {
                 fillWindowDragging = true
-                hideAbortButton()
                 val lp = root?.layoutParams as? WindowManager.LayoutParams
                 dragStartWinX = lp?.x ?: 0
                 dragStartWinY = lp?.y ?: 0
@@ -286,7 +279,10 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
             override fun onFillDragEnd() {
                 fillWindowDragging = false
-                if (fillActive) showAbortButton()
+            }
+
+            override fun onAbortFill() {
+                abortFill("已手动中止填充")
             }
         }
         overlay?.addView(
@@ -306,7 +302,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             fillJob = null
             countdownRunnable?.let { mainHandler.removeCallbacks(it) }
             countdownRunnable = null
-            hideAbortButton()
             AutoFillStateHolder.openSetupRequested.set(true)
             val view = ensureOverlayView() ?: return@post
             val seconds = preSetupCountdownSeconds
@@ -428,7 +423,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         fillActive = true
         view.beginFill(settings.countdownSeconds)
         applyFillWindow()
-        showAbortButton()
         beginCountdownThenRun(art, screenSettings)
     }
 
@@ -462,13 +456,12 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         fillJob?.cancel()
         view.openProgressState()
         view.setMessage("")
-        updateFillWindow(touchable = false)
+        updateFillWindow(touchable = true)
 
         val sequence = runCatching {
             AutoFillActionEngine.buildSequence(art, settings)
         }.getOrElse {
             fillActive = false
-            hideAbortButton()
             view.showDone("无法生成动作，${it.message}")
             return
         }
@@ -481,7 +474,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             delay(150L)
             if (!verifyScreenUnchanged()) {
                 fillActive = false
-                hideAbortButton()
                 view.openDoneState()
                 applyDoneWindow()
                 view.setMessage("画面发生变动（可能误触缩放），已中止填充，请重新框选后重试")
@@ -512,7 +504,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
             if (!fillActive) return@launch
             fillActive = false
-            hideAbortButton()
             view.openDoneState()
             applyDoneWindow()
             view.setMessage(
@@ -532,7 +523,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         fillJob = null
         countdownRunnable?.let { mainHandler.removeCallbacks(it) }
         countdownRunnable = null
-        hideAbortButton()
         val view = overlayView ?: return
         view.openDoneState()
         applyDoneWindow()
@@ -546,7 +536,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         fillJob = null
         countdownRunnable?.let { mainHandler.removeCallbacks(it) }
         countdownRunnable = null
-        hideAbortButton()
     }
 
     private suspend fun dispatchGestureSuspending(action: AutoFillAction): Boolean {
@@ -722,8 +711,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         val setup = view.screenshot ?: return true
         val current = takeScreenshotBitmap() ?: return true
         val excludes = listOfNotNull(
-            currentFillWindowScreenRect(),
-            currentAbortButtonScreenRect()
+            currentFillWindowScreenRect()
         )
         val regions = listOf(
             AutoFillStateHolder.settings.canvasRect,
@@ -807,74 +795,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             count += 3
         }
         return if (count == 0L) 0f else sum.toFloat() / count.toFloat()
-    }
-
-    private fun showAbortButton() {
-        if (abortWindow != null) return
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val density = resources.displayMetrics.density
-        val width = (density * 128f).roundToInt()
-        val height = (density * 52f).roundToInt()
-        val margin = (density * 12f).roundToInt()
-        val params = WindowManager.LayoutParams(
-            width,
-            height,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = margin
-            y = margin
-        }
-        val frame = FrameLayout(this)
-        val button = TextView(this).apply {
-            text = "中止填充"
-            setTextColor(Color.WHITE)
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setBackgroundColor(0xCCB3261E.toInt())
-            setOnClickListener { abortFill("已手动中止填充") }
-            setOnTouchListener { _, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> abortButtonPressed = true
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> abortButtonPressed = false
-                }
-                false
-            }
-        }
-        frame.addView(
-            button,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        abortWindow = frame
-        runCatching { wm.addView(frame, params) }
-    }
-
-    private fun hideAbortButton() {
-        abortButtonPressed = false
-        abortWindow?.let { w ->
-            runCatching {
-                val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                wm.removeView(w)
-            }
-        }
-        abortWindow = null
-    }
-
-    private fun currentAbortButtonScreenRect(): RectF? {
-        val params = abortWindow?.layoutParams as? WindowManager.LayoutParams ?: return null
-        return RectF(
-            params.x.toFloat(),
-            params.y.toFloat(),
-            (params.x + params.width).toFloat(),
-            (params.y + params.height).toFloat()
-        )
     }
 
     private fun dismissOverlay() {
