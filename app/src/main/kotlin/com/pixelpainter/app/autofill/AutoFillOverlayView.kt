@@ -295,11 +295,34 @@ class AutoFillOverlayView(context: Context) : View(context) {
         }
         val d = displayedRect
         if (d.width() <= 0f || d.height() <= 0f) return RectF(rect)
-        return RectF(
+        // 1) view coords -> screenshot pixel coords
+        val shotRect = RectF(
             (rect.left - d.left) / scale,
             (rect.top - d.top) / scale,
             (rect.right - d.left) / scale,
             (rect.bottom - d.top) / scale
+        )
+        // 2) screenshot pixels -> physical/rendered screen pixels (dispatchGesture
+        //    coordinates). On most devices these match 1:1; some models return a
+        //    screenshot sized differently from the active display, which would
+        //    otherwise shift every tap (e.g. canvas appears offset).
+        val dm = resources.displayMetrics
+        val sx = dm.widthPixels.toFloat() / shot.width
+        val sy = dm.heightPixels.toFloat() / shot.height
+        if (android.util.Log.isLoggable("ArknightsPixelTool", android.util.Log.DEBUG)) {
+            android.util.Log.d(
+                "ArknightsPixelTool",
+                "mapViewToScreen shot=${shot.width}x${shot.height} screen=${dm.widthPixels}x${dm.heightPixels} sx=$sx sy=$sy"
+            )
+        }
+        if (kotlin.math.abs(sx - 1f) < 0.01f && kotlin.math.abs(sy - 1f) < 0.01f) {
+            return shotRect
+        }
+        return RectF(
+            shotRect.left * sx,
+            shotRect.top * sy,
+            shotRect.right * sx,
+            shotRect.bottom * sy
         )
     }
 
