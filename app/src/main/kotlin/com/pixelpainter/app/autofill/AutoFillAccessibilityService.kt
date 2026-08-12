@@ -44,6 +44,10 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val preSetupCountdownSeconds = 5
+    private var fillWindowDragging = false
+    private var dragStartWinX = 0
+    private var dragStartWinY = 0
+    private var fillWindowPos: Pair<Int, Int>? = null
 
     private var root: FrameLayout? = null
     private var overlay: FrameLayout? = null
@@ -139,7 +143,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             // The user touched the screen while the fill is running. Abort
             // immediately so a second touch point can never trigger a pinch
             // zoom or canvas scroll that would misalign the remaining taps.
-            if (fillActive && !syntheticTouchActive && !abortButtonPressed) {
+            if (fillActive && !syntheticTouchActive && !abortButtonPressed && !fillWindowDragging) {
                 abortFill("检测到屏幕被触碰，已中止填充，请勿在填充时触碰屏幕")
             }
             return
@@ -261,8 +265,24 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
                 dismissOverlay()
             }
 
-            override fun onDragFill(dx: Float, dy: Float) {
-                moveFillWindow(dx, dy)
+            override fun onFillDragStart() {
+                fillWindowDragging = true
+                val lp = root?.layoutParams as? WindowManager.LayoutParams
+                dragStartWinX = lp?.x ?: 0
+                dragStartWinY = lp?.y ?: 0
+            }
+
+            override fun onFillDragMove(dx: Float, dy: Float) {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                val lp = root?.layoutParams as? WindowManager.LayoutParams ?: return
+                lp.x = (dragStartWinX + dx).roundToInt()
+                lp.y = (dragStartWinY + dy).roundToInt()
+                fillWindowPos = lp.x to lp.y
+                runCatching { wm.updateViewLayout(root!!, lp) }
+            }
+
+            override fun onFillDragEnd() {
+                fillWindowDragging = false
             }
         }
         overlay?.addView(
@@ -634,10 +654,11 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         // overlap; pinned to the top-right corner so it never covers the
         // palette (right side) or the canvas center while the fill is running.
         params.width = (density * 240f).roundToInt()
-        params.height = (density * 110f).roundToInt()
+        params.height = (density * 60f).roundToInt()
         val margin = (density * 12f).roundToInt()
-        params.x = resources.displayMetrics.widthPixels - params.width - margin
-        params.y = margin
+        val pos = fillWindowPos
+        params.x = pos?.first ?: (resources.displayMetrics.widthPixels - params.width - margin)
+        params.y = pos?.second ?: margin
         params.gravity = Gravity.TOP or Gravity.START
         params.flags = if (touchable) {
             baseWindowFlags()
@@ -647,13 +668,6 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         runCatching { wm.updateViewLayout(root!!, params) }
     }
 
-    private fun moveFillWindow(dx: Float, dy: Float) {
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val params = root?.layoutParams as? WindowManager.LayoutParams ?: return
-        params.x = (params.x + dx).roundToInt()
-        params.y = (params.y + dy).roundToInt()
-        runCatching { wm.updateViewLayout(root!!, params) }
-    }
     private fun samplePaletteColors(bitmap: Bitmap?, paletteRect: RectF): IntArray {
         if (bitmap == null || paletteRect.width() <= 0f || paletteRect.height() <= 0f) {
             return IntArray(0)

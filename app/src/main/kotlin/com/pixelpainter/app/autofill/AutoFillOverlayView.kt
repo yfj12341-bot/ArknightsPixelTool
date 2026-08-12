@@ -138,7 +138,9 @@ class AutoFillOverlayView(context: Context) : View(context) {
         fun onCancelFill()
         fun onReopenSetup()
         fun onDismissOverlay()
-        fun onDragFill(dx: Float, dy: Float)
+        fun onFillDragStart()
+        fun onFillDragMove(dx: Float, dy: Float)
+        fun onFillDragEnd()
     }
 
     var listener: Listener? = null
@@ -177,8 +179,8 @@ class AutoFillOverlayView(context: Context) : View(context) {
     private val fillCardRect = RectF()
     private val fillDragHandleRect = RectF()
     private var fillDragging = false
-    private var fillDragLastX = 0f
-    private var fillDragLastY = 0f
+    private var fillDragStartX = 0f
+    private var fillDragStartY = 0f
     private val doneReopenRect = RectF()
     private val doneDismissRect = RectF()
 
@@ -469,26 +471,25 @@ class AutoFillOverlayView(context: Context) : View(context) {
         fillCardRect.set(px(3f), px(3f), width - px(3f), height - px(3f))
         fillDragHandleRect.set(
             fillCardRect.centerX() - px(20f),
-            fillCardRect.top + px(4f),
+            fillCardRect.top + px(3f),
             fillCardRect.centerX() + px(20f),
-            fillCardRect.top + px(16f)
+            fillCardRect.top + px(9f)
         )
-        val btnH = px(24f)
-        val gap = px(6f)
-        val innerPad = px(6f)
-        val btnY = fillCardRect.bottom - btnH - px(3f)
-        val half = (fillCardRect.width() - innerPad * 2f - gap) / 2f
+        val innerPad = px(8f)
+        val gap = px(3f)
+        val btnH = px(14f)
+        val bottomPad = px(3f)
         doneReopenRect.set(
             fillCardRect.left + innerPad,
-            btnY,
-            fillCardRect.left + innerPad + half,
-            btnY + btnH
+            fillCardRect.bottom - btnH - bottomPad,
+            fillCardRect.right - innerPad,
+            fillCardRect.bottom - bottomPad
         )
         doneDismissRect.set(
-            fillCardRect.left + innerPad + half + gap,
-            btnY,
+            fillCardRect.left + innerPad,
+            doneReopenRect.top - gap - btnH,
             fillCardRect.right - innerPad,
-            btnY + btnH
+            doneReopenRect.top - gap
         )
     }
 
@@ -669,31 +670,63 @@ class AutoFillOverlayView(context: Context) : View(context) {
         val radius = px(8f)
         canvas.drawRoundRect(fillCardRect, radius, radius, cardPaint)
         canvas.drawRoundRect(fillCardRect, radius, radius, cardStrokePaint)
+
+        // drag handle hint (three lines) at the top-center; whole card is draggable
         val hx0 = fillDragHandleRect.centerX() - px(8f)
         val hx1 = fillDragHandleRect.centerX() + px(8f)
         val hy = fillDragHandleRect.centerY()
-        canvas.drawLine(hx0, hy - px(4f), hx1, hy - px(4f), fillDragHandlePaint)
+        canvas.drawLine(hx0, hy - px(3f), hx1, hy - px(3f), fillDragHandlePaint)
         canvas.drawLine(hx0, hy, hx1, hy, fillDragHandlePaint)
-        canvas.drawLine(hx0, hy + px(4f), hx1, hy + px(4f), fillDragHandlePaint)
+        canvas.drawLine(hx0, hy + px(3f), hx1, hy + px(3f), fillDragHandlePaint)
 
-        val title = when (uiState) {
-            UiState.COUNTDOWN -> "自动填充准备中"
-            UiState.PROGRESS -> "自动填充执行中"
-            else -> "自动填充完成"
+        val pad = px(8f)
+        val maxTextWidth = fillCardRect.width() - pad * 2f
+
+        if (uiState == UiState.DONE) {
+            // Done: message + stacked buttons (收起 above 重新框选)
+            val msg = if (fillInfoPaint.measureText(message) > maxTextWidth) {
+                TextUtils.ellipsize(message, fillInfoPaint, maxTextWidth, TextUtils.TruncateAt.MIDDLE).toString()
+            } else {
+                message
+            }
+            canvas.drawText(
+                msg,
+                fillCardRect.left + pad,
+                fillCardRect.top + px(14f),
+                fillInfoPaint.apply { textAlign = Paint.Align.LEFT }
+            )
+            fillInfoPaint.textAlign = Paint.Align.LEFT
+            canvas.drawRect(doneReopenRect, buttonStrokePaint)
+            canvas.drawText(
+                "重新框选",
+                doneReopenRect.centerX(),
+                doneReopenRect.centerY() - (fillButtonPaint.ascent() + fillButtonPaint.descent()) / 2f,
+                fillButtonPaint.apply { textAlign = Paint.Align.CENTER }
+            )
+            canvas.drawRect(doneDismissRect, buttonStrokePaint)
+            canvas.drawText(
+                "收起",
+                doneDismissRect.centerX(),
+                doneDismissRect.centerY() - (fillButtonPaint.ascent() + fillButtonPaint.descent()) / 2f,
+                fillButtonPaint.apply { textAlign = Paint.Align.CENTER }
+            )
+            fillButtonPaint.textAlign = Paint.Align.LEFT
+            return
         }
+
+        val title = if (uiState == UiState.COUNTDOWN) "自动填充准备中" else "自动填充执行中"
         canvas.drawText(
             title,
-            fillCardRect.left + px(8f),
-            fillCardRect.top + px(15f),
+            fillCardRect.left + pad,
+            fillCardRect.top + px(14f),
             fillTitlePaint.apply { textAlign = Paint.Align.LEFT }
         )
         fillTitlePaint.textAlign = Paint.Align.LEFT
 
-        val pad = px(8f)
         val barLeft = fillCardRect.left + pad
         val barRight = fillCardRect.right - pad
-        val barTop = fillCardRect.top + px(24f)
-        val barBottom = barTop + px(5f)
+        val barTop = fillCardRect.top + px(21f)
+        val barBottom = barTop + px(4f)
         val fillRight = barLeft + (barRight - barLeft) * fillProgress
         canvas.drawRect(barLeft, barTop, barRight, barBottom, cardStrokePaint)
         canvas.drawRect(barLeft, barTop, fillRight, barBottom, Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -701,12 +734,11 @@ class AutoFillOverlayView(context: Context) : View(context) {
             style = Paint.Style.FILL
         })
 
-        val info = when (uiState) {
-            UiState.COUNTDOWN -> "${fillLabel} 秒后开始，请勿触碰屏幕"
-            UiState.DONE -> message
-            else -> message.ifBlank { fillLabel }
+        val info = if (uiState == UiState.COUNTDOWN) {
+            "${fillLabel} 秒后开始，请勿触碰屏幕"
+        } else {
+            message.ifBlank { fillLabel }
         }
-        val maxTextWidth = fillCardRect.width() - pad * 2f
         val shown = if (fillInfoPaint.measureText(info) > maxTextWidth) {
             TextUtils.ellipsize(info, fillInfoPaint, maxTextWidth, TextUtils.TruncateAt.MIDDLE).toString()
         } else {
@@ -715,34 +747,11 @@ class AutoFillOverlayView(context: Context) : View(context) {
         canvas.drawText(
             shown,
             fillCardRect.left + pad,
-            barBottom + px(14f),
+            barBottom + px(8f),
             fillInfoPaint.apply { textAlign = Paint.Align.LEFT }
         )
         fillInfoPaint.textAlign = Paint.Align.LEFT
-
-        when (uiState) {
-            UiState.PRE_SETUP, UiState.COUNTDOWN, UiState.PROGRESS -> Unit
-            UiState.DONE -> {
-                canvas.drawRect(doneReopenRect, buttonStrokePaint)
-                canvas.drawText(
-                    "重新框选",
-                    doneReopenRect.centerX(),
-                    doneReopenRect.centerY() - (fillButtonPaint.ascent() + fillButtonPaint.descent()) / 2f,
-                    fillButtonPaint.apply { textAlign = Paint.Align.CENTER }
-                )
-                canvas.drawRect(doneDismissRect, buttonStrokePaint)
-                canvas.drawText(
-                    "收起",
-                    doneDismissRect.centerX(),
-                    doneDismissRect.centerY() - (fillButtonPaint.ascent() + fillButtonPaint.descent()) / 2f,
-                    fillButtonPaint.apply { textAlign = Paint.Align.CENTER }
-                )
-                fillButtonPaint.textAlign = Paint.Align.LEFT
-            }
-            UiState.SETUP -> Unit
-        }
     }
-
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
         val x = event.x
@@ -805,19 +814,18 @@ class AutoFillOverlayView(context: Context) : View(context) {
     private fun handleFillTouch(action: Int, x: Float, y: Float): Boolean {
         when (action) {
             MotionEvent.ACTION_DOWN -> {
-                if (fillDragHandleRect.contains(x, y)) {
+                if (fillCardRect.contains(x, y)) {
                     fillDragging = true
-                    fillDragLastX = x
-                    fillDragLastY = y
+                    fillDragStartX = x
+                    fillDragStartY = y
+                    listener?.onFillDragStart()
                     return true
                 }
                 return false
             }
             MotionEvent.ACTION_MOVE -> {
                 if (fillDragging) {
-                    listener?.onDragFill(x - fillDragLastX, y - fillDragLastY)
-                    fillDragLastX = x
-                    fillDragLastY = y
+                    listener?.onFillDragMove(x - fillDragStartX, y - fillDragStartY)
                     return true
                 }
                 return false
@@ -825,6 +833,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (fillDragging) {
                     fillDragging = false
+                    listener?.onFillDragEnd()
                     return true
                 }
                 return false
