@@ -106,11 +106,6 @@ class AutoFillOverlayView(context: Context) : View(context) {
         textSize = px(12f)
         isFakeBoldText = true
     }
-    private val fillDragHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        strokeWidth = px(2f)
-        strokeCap = Paint.Cap.ROUND
-    }
     private val bigCountdownPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = px(84f)
@@ -177,7 +172,6 @@ class AutoFillOverlayView(context: Context) : View(context) {
     private val modePaletteRect = RectF()
 
     private val fillCardRect = RectF()
-    private val fillDragHandleRect = RectF()
     private var fillDragging = false
     private var fillDragStartX = 0f
     private var fillDragStartY = 0f
@@ -469,12 +463,6 @@ class AutoFillOverlayView(context: Context) : View(context) {
         }
 
         fillCardRect.set(px(3f), px(3f), width - px(3f), height - px(3f))
-        fillDragHandleRect.set(
-            fillCardRect.centerX() - px(20f),
-            fillCardRect.top + px(3f),
-            fillCardRect.centerX() + px(20f),
-            fillCardRect.top + px(9f)
-        )
         val innerPad = px(8f)
         val gap = px(3f)
         val btnH = px(14f)
@@ -671,14 +659,6 @@ class AutoFillOverlayView(context: Context) : View(context) {
         canvas.drawRoundRect(fillCardRect, radius, radius, cardPaint)
         canvas.drawRoundRect(fillCardRect, radius, radius, cardStrokePaint)
 
-        // drag handle hint (three lines) at the top-center; whole card is draggable
-        val hx0 = fillDragHandleRect.centerX() - px(8f)
-        val hx1 = fillDragHandleRect.centerX() + px(8f)
-        val hy = fillDragHandleRect.centerY()
-        canvas.drawLine(hx0, hy - px(3f), hx1, hy - px(3f), fillDragHandlePaint)
-        canvas.drawLine(hx0, hy, hx1, hy, fillDragHandlePaint)
-        canvas.drawLine(hx0, hy + px(3f), hx1, hy + px(3f), fillDragHandlePaint)
-
         val pad = px(8f)
         val maxTextWidth = fillCardRect.width() - pad * 2f
 
@@ -692,7 +672,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
             canvas.drawText(
                 msg,
                 fillCardRect.left + pad,
-                fillCardRect.top + px(14f),
+                fillCardRect.top + px(15f),
                 fillInfoPaint.apply { textAlign = Paint.Align.LEFT }
             )
             fillInfoPaint.textAlign = Paint.Align.LEFT
@@ -718,15 +698,15 @@ class AutoFillOverlayView(context: Context) : View(context) {
         canvas.drawText(
             title,
             fillCardRect.left + pad,
-            fillCardRect.top + px(14f),
+            fillCardRect.top + px(15f),
             fillTitlePaint.apply { textAlign = Paint.Align.LEFT }
         )
         fillTitlePaint.textAlign = Paint.Align.LEFT
 
         val barLeft = fillCardRect.left + pad
         val barRight = fillCardRect.right - pad
-        val barTop = fillCardRect.top + px(21f)
-        val barBottom = barTop + px(4f)
+        val barTop = fillCardRect.top + px(24f)
+        val barBottom = barTop + px(5f)
         val fillRight = barLeft + (barRight - barLeft) * fillProgress
         canvas.drawRect(barLeft, barTop, barRight, barBottom, cardStrokePaint)
         canvas.drawRect(barLeft, barTop, fillRight, barBottom, Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -747,7 +727,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
         canvas.drawText(
             shown,
             fillCardRect.left + pad,
-            barBottom + px(8f),
+            barBottom + px(14f),
             fillInfoPaint.apply { textAlign = Paint.Align.LEFT }
         )
         fillInfoPaint.textAlign = Paint.Align.LEFT

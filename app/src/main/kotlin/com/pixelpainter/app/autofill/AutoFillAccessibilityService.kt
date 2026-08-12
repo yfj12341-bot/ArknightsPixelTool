@@ -458,7 +458,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         fillJob?.cancel()
         view.openProgressState()
         view.setMessage("")
-        applyFillWindow()
+        updateFillWindow(touchable = false)
 
         val sequence = runCatching {
             AutoFillActionEngine.buildSequence(art, settings)
@@ -653,8 +653,8 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         // Taller card so title / progress bar / info line / DONE buttons do not
         // overlap; pinned to the top-right corner so it never covers the
         // palette (right side) or the canvas center while the fill is running.
-        params.width = (density * 240f).roundToInt()
-        params.height = (density * 60f).roundToInt()
+        params.width = (density * 120f).roundToInt()
+        params.height = (density * 110f).roundToInt()
         val margin = (density * 12f).roundToInt()
         val pos = fillWindowPos
         params.x = pos?.first ?: (resources.displayMetrics.widthPixels - params.width - margin)
