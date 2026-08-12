@@ -143,7 +143,9 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             // The user touched the screen while the fill is running. Abort
             // immediately so a second touch point can never trigger a pinch
             // zoom or canvas scroll that would misalign the remaining taps.
-            if (fillActive && !syntheticTouchActive && !abortButtonPressed && !fillWindowDragging) {
+            if (overlayView?.uiState == AutoFillOverlayView.UiState.PROGRESS &&
+                !syntheticTouchActive && !abortButtonPressed && !fillWindowDragging
+            ) {
                 abortFill("检测到屏幕被触碰，已中止填充，请勿在填充时触碰屏幕")
             }
             return
@@ -267,6 +269,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
             override fun onFillDragStart() {
                 fillWindowDragging = true
+                hideAbortButton()
                 val lp = root?.layoutParams as? WindowManager.LayoutParams
                 dragStartWinX = lp?.x ?: 0
                 dragStartWinY = lp?.y ?: 0
@@ -283,6 +286,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
 
             override fun onFillDragEnd() {
                 fillWindowDragging = false
+                if (fillActive) showAbortButton()
             }
         }
         overlay?.addView(

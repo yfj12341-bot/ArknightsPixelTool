@@ -463,10 +463,10 @@ class AutoFillOverlayView(context: Context) : View(context) {
         }
 
         fillCardRect.set(px(3f), px(3f), width - px(3f), height - px(3f))
-        val innerPad = px(8f)
-        val gap = px(3f)
-        val btnH = px(14f)
-        val bottomPad = px(3f)
+        val innerPad = px(10f)
+        val gap = px(6f)
+        val btnH = px(30f)
+        val bottomPad = px(4f)
         doneReopenRect.set(
             fillCardRect.left + innerPad,
             fillCardRect.bottom - btnH - bottomPad,
@@ -746,7 +746,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
                 }
             }
             UiState.PRE_SETUP -> false
-            UiState.COUNTDOWN, UiState.PROGRESS -> handleFillTouch(action, x, y)
+            UiState.COUNTDOWN, UiState.PROGRESS -> handleFillTouch(event)
             UiState.DONE -> handleDoneTouch(action, x, y)
         }
     }
@@ -791,13 +791,13 @@ class AutoFillOverlayView(context: Context) : View(context) {
         return true
     }
 
-    private fun handleFillTouch(action: Int, x: Float, y: Float): Boolean {
-        when (action) {
+    private fun handleFillTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (fillCardRect.contains(x, y)) {
+                if (fillCardRect.contains(event.x, event.y)) {
                     fillDragging = true
-                    fillDragStartX = x
-                    fillDragStartY = y
+                    fillDragStartX = event.rawX
+                    fillDragStartY = event.rawY
                     listener?.onFillDragStart()
                     return true
                 }
@@ -805,7 +805,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
             }
             MotionEvent.ACTION_MOVE -> {
                 if (fillDragging) {
-                    listener?.onFillDragMove(x - fillDragStartX, y - fillDragStartY)
+                    listener?.onFillDragMove(event.rawX - fillDragStartX, event.rawY - fillDragStartY)
                     return true
                 }
                 return false
