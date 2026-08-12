@@ -553,6 +553,19 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                 HorizontalDivider()
                 Text("更新日志", style = MaterialTheme.typography.titleSmall)
                 Text(
+                    "v0.2.1",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "• 优化鸿蒙（HarmonyOS）兼容性，修复安装提示无证书问题",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "• 填充开启前增加 5 秒等待时间与全屏倒计时提示",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
                     "v0.2.0",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
