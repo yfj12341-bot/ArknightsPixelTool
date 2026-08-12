@@ -553,6 +553,19 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                 HorizontalDivider()
                 Text("更新日志", style = MaterialTheme.typography.titleSmall)
                 Text(
+                    "v0.2.3",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "• 优化自动填充框选校准逻辑，适配截图与屏幕尺寸不一致的机型",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "• 修复旋转屏幕会导致应用重置的问题（锁定竖屏）",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
                     "v0.2.2",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
