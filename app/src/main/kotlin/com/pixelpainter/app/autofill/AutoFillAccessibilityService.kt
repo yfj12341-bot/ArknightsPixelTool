@@ -260,6 +260,10 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
             override fun onDismissOverlay() {
                 dismissOverlay()
             }
+
+            override fun onDragFill(dx: Float, dy: Float) {
+                moveFillWindow(dx, dy)
+            }
         }
         overlay?.addView(
             view,
@@ -618,7 +622,7 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         runCatching { wm.updateViewLayout(root!!, params) }
     }
 
-    private fun applyFillWindow() = updateFillWindow(touchable = false)
+    private fun applyFillWindow() = updateFillWindow(touchable = true)
 
     private fun applyDoneWindow() = updateFillWindow(touchable = true)
 
@@ -643,6 +647,13 @@ class AutoFillAccessibilityService : AccessibilityService(), IDispatcher {
         runCatching { wm.updateViewLayout(root!!, params) }
     }
 
+    private fun moveFillWindow(dx: Float, dy: Float) {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val params = root?.layoutParams as? WindowManager.LayoutParams ?: return
+        params.x = (params.x + dx).roundToInt()
+        params.y = (params.y + dy).roundToInt()
+        runCatching { wm.updateViewLayout(root!!, params) }
+    }
     private fun samplePaletteColors(bitmap: Bitmap?, paletteRect: RectF): IntArray {
         if (bitmap == null || paletteRect.width() <= 0f || paletteRect.height() <= 0f) {
             return IntArray(0)

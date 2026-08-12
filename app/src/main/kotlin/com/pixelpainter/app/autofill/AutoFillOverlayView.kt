@@ -106,6 +106,11 @@ class AutoFillOverlayView(context: Context) : View(context) {
         textSize = px(12f)
         isFakeBoldText = true
     }
+    private val fillDragHandlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        strokeWidth = px(2f)
+        strokeCap = Paint.Cap.ROUND
+    }
     private val bigCountdownPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = px(84f)
@@ -133,6 +138,7 @@ class AutoFillOverlayView(context: Context) : View(context) {
         fun onCancelFill()
         fun onReopenSetup()
         fun onDismissOverlay()
+        fun onDragFill(dx: Float, dy: Float)
     }
 
     var listener: Listener? = null
@@ -169,6 +175,10 @@ class AutoFillOverlayView(context: Context) : View(context) {
     private val modePaletteRect = RectF()
 
     private val fillCardRect = RectF()
+    private val fillDragHandleRect = RectF()
+    private var fillDragging = false
+    private var fillDragLastX = 0f
+    private var fillDragLastY = 0f
     private val doneReopenRect = RectF()
     private val doneDismissRect = RectF()
 
@@ -457,6 +467,12 @@ class AutoFillOverlayView(context: Context) : View(context) {
         }
 
         fillCardRect.set(px(3f), px(3f), width - px(3f), height - px(3f))
+        fillDragHandleRect.set(
+            fillCardRect.centerX() - px(20f),
+            fillCardRect.top + px(4f),
+            fillCardRect.centerX() + px(20f),
+            fillCardRect.top + px(16f)
+        )
         val btnH = px(24f)
         val gap = px(6f)
         val innerPad = px(6f)
@@ -653,6 +669,12 @@ class AutoFillOverlayView(context: Context) : View(context) {
         val radius = px(8f)
         canvas.drawRoundRect(fillCardRect, radius, radius, cardPaint)
         canvas.drawRoundRect(fillCardRect, radius, radius, cardStrokePaint)
+        val hx0 = fillDragHandleRect.centerX() - px(8f)
+        val hx1 = fillDragHandleRect.centerX() + px(8f)
+        val hy = fillDragHandleRect.centerY()
+        canvas.drawLine(hx0, hy - px(4f), hx1, hy - px(4f), fillDragHandlePaint)
+        canvas.drawLine(hx0, hy, hx1, hy, fillDragHandlePaint)
+        canvas.drawLine(hx0, hy + px(4f), hx1, hy + px(4f), fillDragHandlePaint)
 
         val title = when (uiState) {
             UiState.COUNTDOWN -> "自动填充准备中"
@@ -781,11 +803,32 @@ class AutoFillOverlayView(context: Context) : View(context) {
     }
 
     private fun handleFillTouch(action: Int, x: Float, y: Float): Boolean {
-        // The fill window is intentionally non-touchable so touches pass
-        // through to the game while the fill is running.
         when (action) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE,
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return false
+            MotionEvent.ACTION_DOWN -> {
+                if (fillDragHandleRect.contains(x, y)) {
+                    fillDragging = true
+                    fillDragLastX = x
+                    fillDragLastY = y
+                    return true
+                }
+                return false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (fillDragging) {
+                    listener?.onDragFill(x - fillDragLastX, y - fillDragLastY)
+                    fillDragLastX = x
+                    fillDragLastY = y
+                    return true
+                }
+                return false
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (fillDragging) {
+                    fillDragging = false
+                    return true
+                }
+                return false
+            }
         }
         return true
     }
